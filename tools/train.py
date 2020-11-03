@@ -35,6 +35,7 @@ from utils.modelsummary import get_model_summary
 from utils.utils import get_optimizer
 from utils.utils import save_checkpoint
 from utils.utils import create_logger
+from utils.autoaugment import Cutout, Cutout_v2, CIFAR10Policy
 
 
 def parse_args():
@@ -80,8 +81,13 @@ def main():
     cudnn.benchmark = config.CUDNN.BENCHMARK
     torch.backends.cudnn.deterministic = config.CUDNN.DETERMINISTIC
     torch.backends.cudnn.enabled = config.CUDNN.ENABLED
+    dataset = config.DATASET.DATASET 
 
-    model = eval('models.'+config.MODEL.NAME+'.get_cls_net')(
+    if dataset.startswith('imagenet'):
+        model = eval('models.'+config.MODEL.NAME+'.get_cls_net')(
+        config)
+    else:
+        model = eval('models.'+config.MODEL.NAME+'.get_cls_net_cifar')(
         config)
 
     dump_input = torch.rand(
@@ -138,41 +144,89 @@ def main():
         )
 
     # Data loading code
-    traindir = os.path.join(config.DATASET.ROOT, config.DATASET.TRAIN_SET)
-    valdir = os.path.join(config.DATASET.ROOT, config.DATASET.TEST_SET)
+    if dataset.startswith('imagenet'):
+        traindir = os.path.join(config.DATASET.ROOT, config.DATASET.TRAIN_SET)
+        valdir = os.path.join(config.DATASET.ROOT, config.DATASET.TEST_SET)
 
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                        std=[0.229, 0.224, 0.225])
 
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transforms.Compose([
-            transforms.RandomResizedCrop(config.MODEL.IMAGE_SIZE[0]),
+        train_dataset = datasets.ImageFolder(
+            traindir,
+            transforms.Compose([
+                transforms.RandomResizedCrop(config.MODEL.IMAGE_SIZE[0]),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ])
+        )
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=config.TRAIN.BATCH_SIZE_PER_GPU*len(gpus),
+            shuffle=True,
+            num_workers=config.WORKERS,
+            pin_memory=True
+        )
+
+        valid_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(valdir, transforms.Compose([
+                transforms.Resize(int(config.MODEL.IMAGE_SIZE[0] / 0.875)),
+                transforms.CenterCrop(config.MODEL.IMAGE_SIZE[0]),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=config.TEST.BATCH_SIZE_PER_GPU*len(gpus),
+            shuffle=False,
+            num_workers=config.WORKERS,
+            pin_memory=True
+        )
+
+    else:
+        CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
+        CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+        if config.TRAIN.AUGMENT == 'autoaugment'
+            print("==>use autoaugment")
+            train_transform = transforms.Compose([
+                transforms.RandomCrop(32, padding=4, fill=128), 
+                transforms.RandomHorizontalFlip(), 
+                CIFAR10Policy(), 
+                transforms.ToTensor(), 
+                Cutout_v2(n_holes=1, length=16),
+                transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+            ])
+        else:
+            train_transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
-        ])
-    )
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=config.TRAIN.BATCH_SIZE_PER_GPU*len(gpus),
-        shuffle=True,
-        num_workers=config.WORKERS,
-        pin_memory=True
-    )
+            transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+            ])
+            if config.TRAIN.AUGMENT == 'cutout':
+                train_transform.transforms.append(Cutout(args.cutout_length))
 
-    valid_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(int(config.MODEL.IMAGE_SIZE[0] / 0.875)),
-            transforms.CenterCrop(config.MODEL.IMAGE_SIZE[0]),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=config.TEST.BATCH_SIZE_PER_GPU*len(gpus),
-        shuffle=False,
-        num_workers=config.WORKERS,
-        pin_memory=True
-    )
+        valid_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        ])
+
+        train_dataset = datasets.CIFAR10(root=config.DATASET.ROOT, train=True, download=True, transform=train_transform)
+        valid_dataset = datasets.CIFAR10(root=config.DATASET.ROOT, train=False, download=True, transform=valid_transform)
+
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=config.TRAIN.BATCH_SIZE_PER_GPU*len(gpus),
+            shuffle=True,
+            num_workers=config.WORKERS,
+            pin_memory=True
+        )
+        valid_loader = torch.utils.data.DataLoader(
+            valid_dataset,
+            batch_size=config.TEST.BATCH_SIZE_PER_GPU*len(gpus),
+            shuffle=False,
+            num_workers=config.WORKERS,
+            pin_memory=True
+        )
+    
 
     for epoch in range(last_epoch, config.TRAIN.END_EPOCH):
         lr_scheduler.step()

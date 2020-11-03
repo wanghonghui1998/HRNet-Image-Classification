@@ -1,0 +1,77 @@
+GPUS: (0,1,2,3)
+LOG_DIR: '/home/whh/workspace/log/HRNet/'
+DATA_DIR: '/home/whh/workspace/data/'
+OUTPUT_DIR: '/home/whh/workspace/output/HRNet'
+WORKERS: 4
+PRINT_FREQ: 100
+
+MODEL: 
+  NAME: cls_hrnet
+  IMAGE_SIZE: 
+    - 32
+    - 32
+  EXTRA:
+    STAGE1:
+      NUM_MODULES: 1
+      NUM_RANCHES: 1
+      BLOCK: BASIC
+      NUM_BLOCKS:
+      - 4
+      NUM_CHANNELS:
+      - 24
+      FUSE_METHOD: SUM
+    STAGE2:
+      NUM_MODULES: 4
+      NUM_BRANCHES: 2
+      BLOCK: BASIC
+      NUM_BLOCKS:
+      - 4
+      - 4
+      NUM_CHANNELS:
+      - 12
+      - 24
+      FUSE_METHOD: SUM
+    STAGE3:
+      NUM_MODULES: 3
+      NUM_BRANCHES: 3
+      BLOCK: BASIC
+      NUM_BLOCKS:
+      - 4
+      - 4
+      - 4
+      NUM_CHANNELS:
+      - 12
+      - 24
+      - 36
+      FUSE_METHOD: SUM
+CUDNN:
+  BENCHMARK: true
+  DETERMINISTIC: false
+  ENABLED: true
+DATASET:
+  DATASET: "cifar"
+  DATA_FORMAT: 'jpg'
+  ROOT: 'data/cifar/'
+  TEST_SET: 'val'
+  TRAIN_SET: 'train'
+TEST:
+  BATCH_SIZE_PER_GPU: 64
+  MODEL_FILE: ''
+TRAIN:
+  BATCH_SIZE_PER_GPU: 64
+  BEGIN_EPOCH: 0
+  END_EPOCH: 300
+  RESUME: false
+  AUGMENT: standard
+  LR_FACTOR: 0.1
+  LR_STEP:
+  - 150
+  - 225
+  OPTIMIZER: sgd
+  LR: 0.1
+  WD: 0.0001
+  MOMENTUM: 0.9
+  NESTEROV: true
+  SHUFFLE: true
+DEBUG:
+  DEBUG: false
