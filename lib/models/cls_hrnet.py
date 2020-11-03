@@ -253,7 +253,7 @@ blocks_dict = {
 class HighResolutionNet_cifar(nn.Module):
 
     def __init__(self, cfg, **kwargs):
-        super(HighResolutionNet, self).__init__()
+        super(HighResolutionNet_cifar, self).__init__()
         # channels may be modified
         start_channels = 24
         self.conv1 = nn.Conv2d(3, start_channels, kernel_size=3, stride=2, padding=1,
@@ -303,13 +303,13 @@ class HighResolutionNet_cifar(nn.Module):
         self.incre_modules, self.downsamp_modules, \
             self.final_layer = self._make_head(pre_stage_channels)
 
-        self.classifier = nn.Linear(128, 10)
+        self.classifier = nn.Linear(256, 10)
 
     def _make_head(self, pre_stage_channels):
         head_block = BasicBlock
         # channels may be modified
-        head_channels = [16, 32, 64]
-        final_channels = 128
+        head_channels = [32, 64, 128]
+        final_channels = 256
 
         # Increasing the #channels on each resolution 
         # from C, 2C, 4C to 16, 32, 64

@@ -36,6 +36,7 @@ from utils.utils import get_optimizer
 from utils.utils import save_checkpoint
 from utils.utils import create_logger
 from utils.autoaugment import Cutout, Cutout_v2, CIFAR10Policy
+from utils.op_counter import measure_model
 
 
 def parse_args():
@@ -94,6 +95,9 @@ def main():
         (1, 3, config.MODEL.IMAGE_SIZE[1], config.MODEL.IMAGE_SIZE[0])
     )
     logger.info(get_model_summary(model, dump_input))
+    # n_flops, n_params = measure_model(model, 32, 32, torch.zeros(1,3,32,32))
+    # logger.info("param size = %fMB", n_params[0]/1e6)
+    # logger.info("flops = %fM", n_flops[0]/1e6)
 
     # copy model file
     this_dir = os.path.dirname(__file__)
@@ -184,7 +188,7 @@ def main():
     else:
         CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
         CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
-        if config.TRAIN.AUGMENT == 'autoaugment'
+        if config.TRAIN.AUGMENT == 'autoaugment':
             print("==>use autoaugment")
             train_transform = transforms.Compose([
                 transforms.RandomCrop(32, padding=4, fill=128), 
@@ -202,7 +206,7 @@ def main():
             transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
             ])
             if config.TRAIN.AUGMENT == 'cutout':
-                train_transform.transforms.append(Cutout(args.cutout_length))
+                train_transform.transforms.append(Cutout(16))
 
         valid_transform = transforms.Compose([
         transforms.ToTensor(),
